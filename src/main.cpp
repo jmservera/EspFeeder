@@ -3,15 +3,17 @@
 // Include the Arduino Stepper Library
 #include <Stepper.h>
 
-#include <secrets.h>
-#include <ESP8266WiFi.h>
+#include "secrets.h" // write here the ssid and pass variables
+#include "wifi.h"
 
+// Configure the GPIO where we connected the INs
 #define IN1 0 // 12 GPIO0
 #define IN2 2 // 11 GPIO2
 #define IN3 5 // 14 GPIO5
 #define IN4 4 // 13 GPIO4
 
-// Number of steps per output rotation
+// Number of steps per output rotation, Nema17 specs says 0.8 degrees each step
+// this makes 200 steps for 360
 const int stepsPerRevolution = 200;
 
 
@@ -19,7 +21,9 @@ const int stepsPerRevolution = 200;
 // Create Instance of Stepper library
 Stepper myStepper(stepsPerRevolution, IN1,IN2,IN3,IN4);
 
-WiFiServer server(80);
+WiFiServer server(8080);
+
+static AppWifi appWifi;
 
 void setup()
 {
@@ -42,13 +46,9 @@ void setup()
 	Serial.println("Speed set at 60");
 
 	Serial.println("Starting wifi");
-	WiFi.begin(ssid,pass);
-	while (WiFi.status() != WL_CONNECTED) {
-		delay(500);
-		Serial.print(".");
-	}
-	Serial.println("");
-	Serial.println("WiFi connected");
+
+
+  appWifi.setup();
 
 	// Start the server
 	server.begin();
@@ -58,7 +58,7 @@ void setup()
 	Serial.print("Use this URL to connect: ");
 	Serial.print("http://");    //URL IP to be typed in mobile/desktop browser
 	Serial.print(WiFi.localIP());
-	Serial.println("/");
+	Serial.println(":8080/");
 }
 
 void loop() 
@@ -71,8 +71,13 @@ void loop()
  
   // Wait until the client sends some data
   Serial.println("new client");
+  int max=15;
   while(!client.available()){
     delay(1);
+    if(max--==0){
+      Serial.println("Client didnt send data");
+      return;
+    }
   }
  
   // Read the first line of the request
@@ -110,6 +115,6 @@ void loop()
   client.println("<a href=\"/Command=backward\"\"><button>Backward </button></a><br />");  
   client.println("</html>");
   delay(1);
-  Serial.println("Client disonnected");
+  Serial.println("Client disconnected");
   Serial.println("");
 }
