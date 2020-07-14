@@ -1,69 +1,55 @@
-#include <Arduino.h>
+/*****************************************************
+ * Date: 9 july 2018
+ * Written by: Usman Ali Butt
+ * Property off: microcontroller-project.com
+ * ***************************************************/
+#include <ESP8266WiFi.h>
+ 
+const char* ssid = "Servezas";
+const char* password = "mdeaeiMCrbkSG1MDBPIW";
 
-// Include the Arduino Stepper Library
-#include <Stepper.h>
+int Step = 0; //GPIO0---D3 of Nodemcu--Step of stepper motor driver
+int Dir  = 2; //GPIO2---D4 of Nodemcu--Direction of stepper motor driver
 
-#include "secrets.h" // write here the ssid and pass variables
-#include "wifi.h"
-
-// Configure the GPIO where we connected the INs
-#define IN1 0 // 12 GPIO0
-#define IN2 2 // 11 GPIO2
-#define IN3 5 // 14 GPIO5
-#define IN4 4 // 13 GPIO4
-
-// Number of steps per output rotation, Nema17 specs says 0.8 degrees each step
-// this makes 200 steps for 360
-const int stepsPerRevolution = 200;
-
-
-
-// Create Instance of Stepper library
-Stepper myStepper(stepsPerRevolution, IN1,IN2,IN3,IN4);
-
-WiFiServer server(8080);
-
-static AppWifi appWifi;
-
-void setup()
-{
-	// initialize the serial port:
-	Serial.begin(115200);
-	Serial.println("Start");
-	delay(1000);
-
-	pinMode(IN1,OUTPUT);
-	pinMode(IN2,OUTPUT);
-	pinMode(IN3,OUTPUT);
-	pinMode(IN4,OUTPUT);
-
-	Serial.println("Pins configured");
-
-	delay(1000);
-	// set the speed at 60 rpm:
-	// enable interrupts for rotary encoder pins
-	myStepper.setSpeed(60);
-	Serial.println("Speed set at 60");
-
-	Serial.println("Starting wifi");
-
-
-  appWifi.setup();
-
-	// Start the server
-	server.begin();
-	Serial.println("Server started");
-	
-	// Print the IP address on serial monitor
-	Serial.print("Use this URL to connect: ");
-	Serial.print("http://");    //URL IP to be typed in mobile/desktop browser
-	Serial.print(WiFi.localIP());
-	Serial.println(":8080/");
+WiFiServer server(80);
+ 
+void setup() {
+  Serial.begin(115200);
+  delay(10);
+ pinMode(Step, OUTPUT); //Step pin as output
+ pinMode(Dir,  OUTPUT); //Direcction pin as output
+ digitalWrite(Step, LOW); // Currently no stepper motor movement
+ digitalWrite(Dir, LOW);  
+ 
+  // Connect to WiFi network
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+ 
+  WiFi.begin(ssid, password);
+ 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+ 
+  // Start the server
+  server.begin();
+  Serial.println("Server started");
+ 
+  // Print the IP address on serial monitor
+  Serial.print("Use this URL to connect: ");
+  Serial.print("http://");    //URL IP to be typed in mobile/desktop browser
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
+ 
 }
-
-void loop() 
-{
-	  // Check if a client has connected
+ 
+void loop() {
+  // Check if a client has connected
   WiFiClient client = server.available();
   if (!client) {
     return;
@@ -71,11 +57,12 @@ void loop()
  
   // Wait until the client sends some data
   Serial.println("new client");
-  int max=15;
+  int clientWait=50;
   while(!client.available()){
     delay(1);
-    if(max--==0){
-      Serial.println("Client didnt send data");
+    if(clientWait--==0)
+    {
+      Serial.println("Client failed");
       return;
     }
   }
@@ -84,16 +71,29 @@ void loop()
   String request = client.readStringUntil('\r');
   Serial.println(request);
   client.flush();
-
-  int forward=1;
  
-  if (request.indexOf("/Command=forward") != -1)  { //Move 1 step forward
-	myStepper.step(stepsPerRevolution);
+  // Match the request
+  int i=0;
+  int value = LOW;
+  
+  if (request.indexOf("/Command=forward") != -1)  { //Move 50 steps forward
+    digitalWrite(Dir, HIGH); //Rotate stepper motor in clock wise direction
+          for( i=1;i<=200;i++){
+          digitalWrite(Step, HIGH);
+          delay(10);
+          digitalWrite(Step, LOW);
+          delay(10);}
+    value = HIGH;
   }
   
-  if (request.indexOf("/Command=backward") != -1)  { //Move 1 step backwards
-	myStepper.step(-stepsPerRevolution);
-	forward=0;
+  if (request.indexOf("/Command=backward") != -1)  { //Move 50 steps backwards
+    digitalWrite(Dir, LOW); //Rotate stepper motor in anti clock wise direction
+          for( i=1;i<=200;i++){
+          digitalWrite(Step, HIGH);
+          delay(10);
+          digitalWrite(Step, LOW);
+          delay(10);}
+    value = LOW;
   }
 
   // Return the response
@@ -105,7 +105,7 @@ void loop()
   client.println("<h1 align=center>Stepper motor controlled over WiFi</h1><br><br>");
   client.print("Stepper motor moving= ");
  
-  if(forward == 1) {
+  if(value == HIGH) {
     client.print("Forward");
   } else {
     client.print("Backward");
@@ -115,6 +115,7 @@ void loop()
   client.println("<a href=\"/Command=backward\"\"><button>Backward </button></a><br />");  
   client.println("</html>");
   delay(1);
-  Serial.println("Client disconnected");
+  Serial.println("Client disonnected");
   Serial.println("");
+ 
 }
